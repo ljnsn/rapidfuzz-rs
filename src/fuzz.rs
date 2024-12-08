@@ -195,8 +195,7 @@ where
         s1_iter.count(),
         s2_iter.clone(),
         s2_iter.count(),
-        args.score_cutoff.cutoff(),
-        args.score_hint,
+        args,
     );
 
     match alignment {
@@ -205,13 +204,12 @@ where
     }
 }
 
-pub fn partial_ratio_alignment<Iter1, Iter2>(
+pub fn partial_ratio_alignment<Iter1, Iter2, CutoffType>(
     s1: Iter1,
     len1: usize,
     s2: Iter2,
     len2: usize,
-    score_cutoff: Option<f64>,
-    score_hint: Option<f64>,
+    args: &Args<f64, CutoffType>,
 ) -> Option<ScoreAlignment>
 where
     Iter1: IntoIterator,
@@ -220,11 +218,12 @@ where
     Iter2::IntoIter: DoubleEndedIterator + Clone,
     Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
     Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+    CutoffType: SimilarityCutoff<f64, Output = f64>,
 {
     let s1_iter = s1.into_iter();
     let s2_iter = s2.into_iter();
 
-    let mut score_cutoff = score_cutoff.unwrap_or(0.0);
+    let mut score_cutoff = args.score_cutoff.cutoff().unwrap_or(0.0);
 
     let mut res = if len1 <= len2 {
         partial_ratio_short_needle(
@@ -233,7 +232,7 @@ where
             s2_iter.clone(),
             len2,
             score_cutoff / 100.0,
-            score_hint,
+            args.score_hint,
         )
     } else {
         partial_ratio_short_needle(
@@ -242,7 +241,7 @@ where
             s1_iter.clone(),
             len1,
             score_cutoff / 100.0,
-            score_hint,
+            args.score_hint,
         )
     };
     if (res.score != 100.0) && (len1 == len2) {
@@ -254,7 +253,7 @@ where
                 s1_iter.clone(),
                 len1,
                 score_cutoff / 100.0,
-                None,
+                args.score_hint,
             )
         } else {
             partial_ratio_short_needle(
@@ -263,7 +262,7 @@ where
                 s2_iter.clone(),
                 len2,
                 score_cutoff / 100.0,
-                None,
+                args.score_hint,
             )
         };
         if res2.score > res.score {
@@ -341,7 +340,7 @@ where
         dest_end: len1,
     };
 
-    let indel_comp = indel::IndividualComparator {};
+    let indel_comp = indel::BatchComparator::new(s1_iter.clone());
 
     for i in 1..len1 {
         let substr_last = s2_iter.clone().nth(i - 1).unwrap();
@@ -349,14 +348,15 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp._normalized_similarity(
-            s1_iter.clone(),
-            len1,
-            s2_iter.clone().take(i).collect::<Vec<_>>().into_iter(),
-            i,
-            Some(score_cutoff),
-            score_hint,
-        );
+        let ls_ratio = indel_comp
+            .normalized_similarity_with_args(
+                s2_iter.clone().take(i).collect::<Vec<_>>().into_iter(),
+                &indel::Args {
+                    score_cutoff: WithScoreCutoff(score_cutoff),
+                    score_hint,
+                },
+            )
+            .expect("score should be calculated");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -376,19 +376,20 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp._normalized_similarity(
-            s1_iter.clone(),
-            len1,
-            s2_iter
-                .clone()
-                .skip(i)
-                .take(len1)
-                .collect::<Vec<_>>()
-                .into_iter(),
-            len1,
-            Some(score_cutoff),
-            score_hint,
-        );
+        let ls_ratio = indel_comp
+            .normalized_similarity_with_args(
+                s2_iter
+                    .clone()
+                    .skip(i)
+                    .take(len1)
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+                &indel::Args {
+                    score_cutoff: WithScoreCutoff(score_cutoff),
+                    score_hint,
+                },
+            )
+            .expect("score should be calculated");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -407,14 +408,15 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp._normalized_similarity(
-            s1_iter.clone(),
-            len1,
-            s2_iter.clone().skip(i).collect::<Vec<_>>().into_iter(),
-            len2 - i,
-            Some(score_cutoff),
-            score_hint,
-        );
+        let ls_ratio = indel_comp
+            .normalized_similarity_with_args(
+                s2_iter.clone().skip(i).collect::<Vec<_>>().into_iter(),
+                &indel::Args {
+                    score_cutoff: WithScoreCutoff(score_cutoff),
+                    score_hint,
+                },
+            )
+            .expect("score should be calculated");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
