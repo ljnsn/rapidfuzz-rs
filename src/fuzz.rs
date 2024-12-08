@@ -1,7 +1,9 @@
 use crate::common::{NoScoreCutoff, SimilarityCutoff, WithScoreCutoff};
 use crate::details::distance::MetricUsize;
+use crate::distance::common::ScoreAlignment;
 use crate::distance::indel;
 use crate::HashableChar;
+use std::collections::HashSet;
 
 #[must_use]
 #[derive(Clone, Copy, Debug)]
@@ -147,6 +149,286 @@ where
                 args.score_hint,
             ))
     }
+}
+
+/// Searches for the optimal alignment of the shorter string in the
+/// longer string and returns the fuzz.ratio for this alignment.
+///
+/// # Example
+/// ```
+/// use rapidfuzz::fuzz;
+/// /// score is 100.0
+/// let score = fuzz::partial_ratio("this is a test".chars(), "this is a test!".chars());
+/// ```
+///
+pub fn partial_ratio<Iter1, Iter2>(s1: Iter1, s2: Iter2) -> f64
+where
+    Iter1: IntoIterator,
+    Iter1::IntoIter: DoubleEndedIterator + Clone,
+    Iter2: IntoIterator,
+    Iter2::IntoIter: DoubleEndedIterator + Clone,
+    Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
+    Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+{
+    ratio_with_args(s1, s2, &Args::default())
+}
+
+pub fn partial_ratio_with_args<Iter1, Iter2, CutoffType>(
+    s1: Iter1,
+    s2: Iter2,
+    args: &Args<f64, CutoffType>,
+) -> CutoffType::Output
+where
+    Iter1: IntoIterator,
+    Iter1::IntoIter: DoubleEndedIterator + Clone,
+    Iter2: IntoIterator,
+    Iter2::IntoIter: DoubleEndedIterator + Clone,
+    Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
+    Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+    CutoffType: SimilarityCutoff<f64, Output = f64>,
+{
+    let s1_iter = s1.into_iter();
+    let s2_iter = s2.into_iter();
+
+    let alignment = partial_ratio_alignment(
+        s1_iter.clone(),
+        s1_iter.count(),
+        s2_iter.clone(),
+        s2_iter.count(),
+        args.score_cutoff.cutoff(),
+        args.score_hint,
+    );
+
+    match alignment {
+        Some(alignment) => alignment.score,
+        None => 0.0,
+    }
+}
+
+pub fn partial_ratio_alignment<Iter1, Iter2>(
+    s1: Iter1,
+    len1: usize,
+    s2: Iter2,
+    len2: usize,
+    score_cutoff: Option<f64>,
+    score_hint: Option<f64>,
+) -> Option<ScoreAlignment>
+where
+    Iter1: IntoIterator,
+    Iter1::IntoIter: DoubleEndedIterator + Clone,
+    Iter2: IntoIterator,
+    Iter2::IntoIter: DoubleEndedIterator + Clone,
+    Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
+    Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+{
+    let s1_iter = s1.into_iter();
+    let s2_iter = s2.into_iter();
+
+    let mut score_cutoff = score_cutoff.unwrap_or(0.0);
+
+    let mut res = if len1 <= len2 {
+        partial_ratio_short_needle(
+            s1_iter.clone(),
+            len1,
+            s2_iter.clone(),
+            len2,
+            score_cutoff / 100.0,
+            score_hint,
+        )
+    } else {
+        partial_ratio_short_needle(
+            s2_iter.clone(),
+            len2,
+            s1_iter.clone(),
+            len1,
+            score_cutoff / 100.0,
+            score_hint,
+        )
+    };
+    if (res.score != 100.0) && (len1 == len2) {
+        score_cutoff = f64::max(score_cutoff, res.score);
+        let res2 = if len1 <= len2 {
+            partial_ratio_short_needle(
+                s2_iter.clone(),
+                len2,
+                s1_iter.clone(),
+                len1,
+                score_cutoff / 100.0,
+                None,
+            )
+        } else {
+            partial_ratio_short_needle(
+                s1_iter.clone(),
+                len1,
+                s2_iter.clone(),
+                len2,
+                score_cutoff / 100.0,
+                None,
+            )
+        };
+        if res2.score > res.score {
+            res = ScoreAlignment {
+                score: res2.score,
+                src_start: res2.dest_start,
+                src_end: res2.dest_end,
+                dest_start: res2.src_start,
+                dest_end: res2.src_end,
+            };
+        }
+    }
+
+    if res.score < score_cutoff {
+        return None;
+    }
+
+    // do we need this? why not just `Some(res)`?
+    if len1 <= len2 {
+        return Some(res);
+    }
+
+    Some(ScoreAlignment {
+        score: res.score,
+        src_start: res.dest_start,
+        src_end: res.dest_end,
+        dest_start: res.src_start,
+        dest_end: res.src_end,
+    })
+}
+
+/**
+implementation of partial_ratio for needles <= 64. assumes s1 is already the
+shorter string
+*/
+fn partial_ratio_short_needle<Iter1, Iter2>(
+    s1: Iter1,
+    len1: usize,
+    s2: Iter2,
+    len2: usize,
+    mut score_cutoff: f64,
+    score_hint: Option<f64>,
+) -> ScoreAlignment
+where
+    Iter1: IntoIterator,
+    Iter1::IntoIter: DoubleEndedIterator + Clone,
+    Iter2: IntoIterator,
+    Iter2::IntoIter: DoubleEndedIterator + Clone,
+    Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
+    Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+{
+    if len1 == 0 {
+        return ScoreAlignment {
+            score: 0.0,
+            src_start: 0,
+            src_end: 0,
+            dest_start: 0,
+            dest_end: 0,
+        };
+    }
+
+    let s1_iter = s1.into_iter();
+    let s2_iter = s2.into_iter();
+
+    let s1_char_set = s1_iter
+        .clone()
+        .map(|c| c.hash_char())
+        .collect::<HashSet<_>>();
+
+    let mut res = ScoreAlignment {
+        score: 0.0,
+        src_start: 0,
+        src_end: len1,
+        dest_start: 0,
+        dest_end: len1,
+    };
+
+    let indel_comp = indel::IndividualComparator {};
+
+    for i in 1..len1 {
+        let substr_last = s2_iter.clone().nth(i - 1).unwrap();
+        if !s1_char_set.contains(&substr_last.hash_char()) {
+            continue;
+        }
+
+        let ls_ratio = indel_comp._normalized_similarity(
+            s1_iter.clone(),
+            len1,
+            s2_iter.clone().take(i).collect::<Vec<_>>().into_iter(),
+            i,
+            Some(score_cutoff),
+            score_hint,
+        );
+        if ls_ratio > res.score {
+            score_cutoff = ls_ratio;
+            res.score = ls_ratio;
+            res.dest_start = 0;
+            res.dest_end = i;
+            if res.score == 1.0 {
+                res.score = 100.0;
+                return res;
+            }
+        }
+    }
+
+    let window_end = len2 - len1;
+    for i in 0..window_end {
+        let substr_last = s2_iter.clone().nth(i + len1 - 1).unwrap();
+        if !s1_char_set.contains(&substr_last.hash_char()) {
+            continue;
+        }
+
+        let ls_ratio = indel_comp._normalized_similarity(
+            s1_iter.clone(),
+            len1,
+            s2_iter
+                .clone()
+                .skip(i)
+                .take(len1)
+                .collect::<Vec<_>>()
+                .into_iter(),
+            len1,
+            Some(score_cutoff),
+            score_hint,
+        );
+        if ls_ratio > res.score {
+            score_cutoff = ls_ratio;
+            res.score = ls_ratio;
+            res.dest_start = i;
+            res.dest_end = i + len1;
+            if res.score == 1.0 {
+                res.score = 100.0;
+                return res;
+            }
+        }
+    }
+
+    for i in window_end..len2 {
+        let substr_first = s2_iter.clone().nth(i).unwrap();
+        if !s1_char_set.contains(&substr_first.hash_char()) {
+            continue;
+        }
+
+        let ls_ratio = indel_comp._normalized_similarity(
+            s1_iter.clone(),
+            len1,
+            s2_iter.clone().skip(i).collect::<Vec<_>>().into_iter(),
+            len2 - i,
+            Some(score_cutoff),
+            score_hint,
+        );
+        if ls_ratio > res.score {
+            score_cutoff = ls_ratio;
+            res.score = ls_ratio;
+            res.dest_start = i;
+            res.dest_end = len2;
+            if res.score == 1.0 {
+                res.score = 100.0;
+                return res;
+            }
+        }
+    }
+
+    res.score *= 100.0;
+    res
 }
 
 #[cfg(test)]
@@ -298,5 +580,47 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[test]
+    fn test_partial_ratio_short_needle_identical() {
+        let s1 = "abcd";
+        let s2 = "abcd";
+
+        let result = partial_ratio_short_needle(
+            s1.chars(),
+            s1.chars().count(),
+            s2.chars(),
+            s2.chars().count(),
+            0.0,
+            None,
+        );
+
+        assert_eq!(result.score, 100.0);
+        assert_eq!(result.src_start, 0);
+        assert_eq!(result.src_end, 4);
+        assert_eq!(result.dest_start, 0);
+        assert_eq!(result.dest_end, 4);
+    }
+
+    #[test]
+    fn test_partial_ratio_short_needle_substring() {
+        let s1 = "bcd";
+        let s2 = "abcde";
+
+        let result = partial_ratio_short_needle(
+            s1.chars(),
+            s1.chars().count(),
+            s2.chars(),
+            s2.chars().count(),
+            0.0,
+            None,
+        );
+
+        assert_eq!(result.score, 100.0);
+        assert_eq!(result.src_start, 0);
+        assert_eq!(result.src_end, 3);
+        assert_eq!(result.dest_start, 1);
+        assert_eq!(result.dest_end, 4);
     }
 }
