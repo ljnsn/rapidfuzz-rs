@@ -226,7 +226,7 @@ where
     let mut score_cutoff = args.score_cutoff.cutoff().unwrap_or(0.0);
 
     let mut res = if len1 <= len2 {
-        partial_ratio_short_needle(
+        partial_ratio_impl(
             s1_iter.clone(),
             len1,
             s2_iter.clone(),
@@ -235,7 +235,7 @@ where
             args.score_hint,
         )
     } else {
-        partial_ratio_short_needle(
+        partial_ratio_impl(
             s2_iter.clone(),
             len2,
             s1_iter.clone(),
@@ -247,7 +247,7 @@ where
     if (res.score != 100.0) && (len1 == len2) {
         score_cutoff = f64::max(score_cutoff, res.score);
         let res2 = if len1 <= len2 {
-            partial_ratio_short_needle(
+            partial_ratio_impl(
                 s2_iter.clone(),
                 len2,
                 s1_iter.clone(),
@@ -256,7 +256,7 @@ where
                 args.score_hint,
             )
         } else {
-            partial_ratio_short_needle(
+            partial_ratio_impl(
                 s1_iter.clone(),
                 len1,
                 s2_iter.clone(),
@@ -298,7 +298,7 @@ where
 implementation of partial_ratio for needles <= 64. assumes s1 is already the
 shorter string
 */
-fn partial_ratio_short_needle<Iter1, Iter2>(
+fn partial_ratio_impl<Iter1, Iter2>(
     s1: Iter1,
     len1: usize,
     s2: Iter2,
@@ -356,7 +356,7 @@ where
                     score_hint,
                 },
             )
-            .expect("score should be calculated");
+            .expect("none only returned when using score_cutoff.score");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -389,7 +389,7 @@ where
                     score_hint,
                 },
             )
-            .expect("score should be calculated");
+            .expect("none only returned when using score_cutoff.score");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -416,7 +416,7 @@ where
                     score_hint,
                 },
             )
-            .expect("score should be calculated");
+            .expect("none only returned when using score_cutoff.score");
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -589,7 +589,7 @@ mod tests {
         let s1 = "abcd";
         let s2 = "abcd";
 
-        let result = partial_ratio_short_needle(
+        let result = partial_ratio_impl(
             s1.chars(),
             s1.chars().count(),
             s2.chars(),
@@ -610,7 +610,7 @@ mod tests {
         let s1 = "bcd";
         let s2 = "abcde";
 
-        let result = partial_ratio_short_needle(
+        let result = partial_ratio_impl(
             s1.chars(),
             s1.chars().count(),
             s2.chars(),
