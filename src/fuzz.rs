@@ -325,7 +325,7 @@ where
     }
 
     let s1_iter = s1.into_iter();
-    let s2_iter = s2.into_iter();
+    let s2_vec = s2.into_iter().collect::<Vec<_>>();
 
     let s1_char_set = s1_iter
         .clone()
@@ -343,14 +343,14 @@ where
     let indel_comp = indel::BatchComparator::new(s1_iter.clone());
 
     for i in 1..len1 {
-        let substr_last = s2_iter.clone().nth(i - 1).unwrap();
+        let substr_last = &s2_vec[i - 1];
         if !s1_char_set.contains(&substr_last.hash_char()) {
             continue;
         }
 
         let ls_ratio = indel_comp
             .normalized_similarity_with_args(
-                s2_iter.clone().take(i).collect::<Vec<_>>().into_iter(),
+                s2_vec[..i].iter().cloned(),
                 &indel::Args {
                     score_cutoff: WithScoreCutoff(score_cutoff),
                     score_hint,
@@ -371,19 +371,14 @@ where
 
     let window_end = len2 - len1;
     for i in 0..window_end {
-        let substr_last = s2_iter.clone().nth(i + len1 - 1).unwrap();
+        let substr_last = &s2_vec[i + len1 - 1];
         if !s1_char_set.contains(&substr_last.hash_char()) {
             continue;
         }
 
         let ls_ratio = indel_comp
             .normalized_similarity_with_args(
-                s2_iter
-                    .clone()
-                    .skip(i)
-                    .take(len1)
-                    .collect::<Vec<_>>()
-                    .into_iter(),
+                s2_vec[i..i + len1].iter().cloned(),
                 &indel::Args {
                     score_cutoff: WithScoreCutoff(score_cutoff),
                     score_hint,
@@ -403,14 +398,14 @@ where
     }
 
     for i in window_end..len2 {
-        let substr_first = s2_iter.clone().nth(i).unwrap();
+        let substr_first = &s2_vec[i];
         if !s1_char_set.contains(&substr_first.hash_char()) {
             continue;
         }
 
         let ls_ratio = indel_comp
             .normalized_similarity_with_args(
-                s2_iter.clone().skip(i).collect::<Vec<_>>().into_iter(),
+                s2_vec[i..].iter().cloned(),
                 &indel::Args {
                     score_cutoff: WithScoreCutoff(score_cutoff),
                     score_hint,
