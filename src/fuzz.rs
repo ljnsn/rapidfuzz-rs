@@ -157,7 +157,7 @@ where
 /// # Example
 /// ```
 /// use rapidfuzz::fuzz;
-/// /// score is 100.0
+/// /// score is 1.0
 /// let score = fuzz::partial_ratio("this is a test".chars(), "this is a test!".chars());
 /// ```
 ///
@@ -230,7 +230,7 @@ where
             len1,
             s2_iter.clone(),
             len2,
-            score_cutoff / 100.0,
+            score_cutoff,
             args.score_hint,
         )
     } else {
@@ -239,11 +239,11 @@ where
             len2,
             s1_iter.clone(),
             len1,
-            score_cutoff / 100.0,
+            score_cutoff,
             args.score_hint,
         )
     };
-    if (res.score != 100.0) && (len1 == len2) {
+    if (res.score != 1.0) && (len1 == len2) {
         score_cutoff = f64::max(score_cutoff, res.score);
         let res2 = if len1 <= len2 {
             partial_ratio_impl(
@@ -251,7 +251,7 @@ where
                 len2,
                 s1_iter.clone(),
                 len1,
-                score_cutoff / 100.0,
+                score_cutoff,
                 args.score_hint,
             )
         } else {
@@ -260,7 +260,7 @@ where
                 len1,
                 s2_iter.clone(),
                 len2,
-                score_cutoff / 100.0,
+                score_cutoff,
                 args.score_hint,
             )
         };
@@ -347,7 +347,6 @@ where
             res.dest_start = 0;
             res.dest_end = i;
             if res.score == 1.0 {
-                res.score = 100.0;
                 return res;
             }
         }
@@ -375,7 +374,6 @@ where
             res.dest_start = i;
             res.dest_end = i + len1;
             if res.score == 1.0 {
-                res.score = 100.0;
                 return res;
             }
         }
@@ -402,13 +400,11 @@ where
             res.dest_start = i;
             res.dest_end = len2;
             if res.score == 1.0 {
-                res.score = 100.0;
                 return res;
             }
         }
     }
 
-    res.score *= 100.0;
     res
 }
 
@@ -568,7 +564,7 @@ mod tests {
         let s1 = "this is a test";
         let s2 = "this is a test!";
         let result = partial_ratio(s1.chars(), s2.chars());
-        assert_eq!(result, 100.0, "Expected 100.0");
+        assert_eq!(result, 1.0, "Expected 1.0");
     }
 
     #[test]
@@ -577,8 +573,8 @@ mod tests {
         let s2 = &format!("a{}{}", char::from_u32(256).unwrap(), "a".repeat(63));
         let result = partial_ratio(s1.chars(), s2.chars());
         assert!(
-            (result - 99.22481).abs() < 1e-5,
-            "Expected approximately 99.22481, got {}",
+            (result - 0.9922481).abs() < 1e-5,
+            "Expected approximately 0.9922481, got {}",
             result
         );
     }
@@ -599,8 +595,8 @@ mod tests {
         dbg!(&alignment);
 
         assert!(
-            (alignment.as_ref().unwrap().score - 66.2337662).abs() < 1e-5,
-            "Expected 66.2337662, got {}",
+            (alignment.as_ref().unwrap().score - 0.662337662).abs() < 1e-5,
+            "Expected 0.662337662, got {}",
             alignment.unwrap().score
         );
         assert_eq!(alignment.as_ref().unwrap().src_start, 0);
@@ -623,7 +619,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(result.score, 100.0);
+        assert_eq!(result.score, 1.0);
         assert_eq!(result.src_start, 0);
         assert_eq!(result.src_end, 4);
         assert_eq!(result.dest_start, 0);
@@ -644,7 +640,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(result.score, 100.0);
+        assert_eq!(result.score, 1.0);
         assert_eq!(result.src_start, 0);
         assert_eq!(result.src_end, 3);
         assert_eq!(result.dest_start, 1);
