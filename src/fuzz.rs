@@ -356,7 +356,7 @@ where
                     score_hint,
                 },
             )
-            .expect("none only returned when using score_cutoff.score");
+            .unwrap_or(0.0);
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -389,7 +389,7 @@ where
                     score_hint,
                 },
             )
-            .expect("none only returned when using score_cutoff.score");
+            .unwrap_or(0.0);
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
@@ -416,7 +416,7 @@ where
                     score_hint,
                 },
             )
-            .expect("none only returned when using score_cutoff.score");
+            .unwrap_or(0.0);
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
             res.score = ls_ratio;
