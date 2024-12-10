@@ -585,7 +585,53 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_ratio_short_needle_identical() {
+    fn test_partial_ratio2() {
+        let s1 = "this is a test";
+        let s2 = "this is a test!";
+        let result = partial_ratio(s1.chars(), s2.chars());
+        assert_eq!(result, 100.0, "Expected 100.0");
+    }
+
+    #[test]
+    fn test_partial_ratio_issue138() {
+        let s1 = &"a".repeat(65);
+        let s2 = &format!("a{}{}", char::from_u32(256).unwrap(), "a".repeat(63));
+        let result = partial_ratio(s1.chars(), s2.chars());
+        assert!(
+            (result - 99.22481).abs() < 1e-5,
+            "Expected approximately 99.22481, got {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_partial_ratio_alignment() {
+        let str1 = "er merkantilismus förderte handle und verkehr mit teils marktkonformen, teils dirigistischen maßnahmen.";
+        let str2 = "ils marktkonformen, teils dirigistischen maßnahmen. an der schwelle zum 19. jahrhundert entstand ein neu";
+
+        let alignment = partial_ratio_alignment(
+            str1.chars(),
+            str1.chars().count(),
+            str2.chars(),
+            str2.chars().count(),
+            &Args::default(),
+        );
+
+        dbg!(&alignment);
+
+        assert!(
+            (alignment.as_ref().unwrap().score - 66.2337662).abs() < 1e-5,
+            "Expected 66.2337662, got {}",
+            alignment.unwrap().score
+        );
+        assert_eq!(alignment.as_ref().unwrap().src_start, 0);
+        assert_eq!(alignment.as_ref().unwrap().src_end, 103);
+        assert_eq!(alignment.as_ref().unwrap().dest_start, 0);
+        assert_eq!(alignment.as_ref().unwrap().dest_end, 51);
+    }
+
+    #[test]
+    fn test_partial_ratio_impl_identical() {
         let s1 = "abcd";
         let s2 = "abcd";
 
@@ -606,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_ratio_short_needle_substring() {
+    fn test_partial_ratio_impl_substring() {
         let s1 = "bcd";
         let s2 = "abcde";
 
