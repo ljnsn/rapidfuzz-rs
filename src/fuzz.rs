@@ -280,18 +280,7 @@ where
         return None;
     }
 
-    // do we need this? why not just `Some(res)`?
-    if len1 <= len2 {
-        return Some(res);
-    }
-
-    Some(ScoreAlignment {
-        score: res.score,
-        src_start: res.dest_start,
-        src_end: res.dest_end,
-        dest_start: res.src_start,
-        dest_end: res.src_end,
-    })
+    Some(res)
 }
 
 /**
