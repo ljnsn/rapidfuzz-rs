@@ -222,7 +222,6 @@ where
 {
     let s1_iter = s1.into_iter();
     let s2_iter = s2.into_iter();
-
     let mut score_cutoff = args.score_cutoff.cutoff().unwrap_or(0.0);
 
     let mut res = if len1 <= len2 {
@@ -276,11 +275,7 @@ where
         }
     }
 
-    if res.score < score_cutoff {
-        return None;
-    }
-
-    Some(res)
+    (res.score >= score_cutoff).then_some(res)
 }
 
 /**
