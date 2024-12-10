@@ -170,7 +170,7 @@ where
     Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
     Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
 {
-    ratio_with_args(s1, s2, &Args::default())
+    partial_ratio_with_args(s1, s2, &Args::default())
 }
 
 pub fn partial_ratio_with_args<Iter1, Iter2, CutoffType>(
