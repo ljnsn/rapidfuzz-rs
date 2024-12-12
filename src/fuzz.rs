@@ -185,7 +185,7 @@ where
     Iter2::IntoIter: DoubleEndedIterator + Clone,
     Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
     Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
-    CutoffType: SimilarityCutoff<f64, Output = f64>,
+    CutoffType: SimilarityCutoff<f64>,
 {
     let s1_iter = s1.into_iter();
     let s2_iter = s2.into_iter();
@@ -198,10 +198,8 @@ where
         args,
     );
 
-    match alignment {
-        Some(alignment) => alignment.score,
-        None => 0.0,
-    }
+    let score = alignment.into().map_or(0.0, |alignment| alignment.score);
+    args.score_cutoff.score(score)
 }
 
 pub fn partial_ratio_alignment<Iter1, Iter2, CutoffType>(
@@ -210,7 +208,7 @@ pub fn partial_ratio_alignment<Iter1, Iter2, CutoffType>(
     s2: Iter2,
     len2: usize,
     args: &Args<f64, CutoffType>,
-) -> Option<ScoreAlignment>
+) -> CutoffType::AlignmentOutput
 where
     Iter1: IntoIterator,
     Iter1::IntoIter: DoubleEndedIterator + Clone,
@@ -218,52 +216,40 @@ where
     Iter2::IntoIter: DoubleEndedIterator + Clone,
     Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
     Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
-    CutoffType: SimilarityCutoff<f64, Output = f64>,
+    CutoffType: SimilarityCutoff<f64>,
 {
     let s1_iter = s1.into_iter();
     let s2_iter = s2.into_iter();
     let mut score_cutoff = args.score_cutoff.cutoff().unwrap_or(0.0);
 
-    let mut res = if len1 <= len2 {
-        partial_ratio_impl(
-            s1_iter.clone(),
-            len1,
-            s2_iter.clone(),
-            len2,
-            score_cutoff,
-            args.score_hint,
-        )
-    } else {
-        partial_ratio_impl(
-            s2_iter.clone(),
-            len2,
-            s1_iter.clone(),
-            len1,
-            score_cutoff,
-            args.score_hint,
-        )
-    };
+    if len1 > len2 {
+        let res = partial_ratio_alignment(s2_iter.clone(), len2, s1_iter.clone(), len1, args);
+        return args.score_cutoff.alignment(res.into().map(|mut alignment| {
+            std::mem::swap(&mut alignment.src_start, &mut alignment.dest_start);
+            std::mem::swap(&mut alignment.src_end, &mut alignment.dest_end);
+            alignment
+        }));
+    }
+
+    let mut res = partial_ratio_impl(
+        s1_iter.clone(),
+        len1,
+        s2_iter.clone(),
+        len2,
+        score_cutoff,
+        args.score_hint,
+    );
+
     if (res.score != 1.0) && (len1 == len2) {
         score_cutoff = f64::max(score_cutoff, res.score);
-        let res2 = if len1 <= len2 {
-            partial_ratio_impl(
-                s2_iter.clone(),
-                len2,
-                s1_iter.clone(),
-                len1,
-                score_cutoff,
-                args.score_hint,
-            )
-        } else {
-            partial_ratio_impl(
-                s1_iter.clone(),
-                len1,
-                s2_iter.clone(),
-                len2,
-                score_cutoff,
-                args.score_hint,
-            )
-        };
+        let res2 = partial_ratio_impl(
+            s2_iter.clone(),
+            len2,
+            s1_iter.clone(),
+            len1,
+            score_cutoff,
+            args.score_hint,
+        );
         if res2.score > res.score {
             res = ScoreAlignment {
                 score: res2.score,
@@ -275,7 +261,7 @@ where
         }
     }
 
-    (res.score >= score_cutoff).then_some(res)
+    args.score_cutoff.alignment(Some(res))
 }
 
 /**
@@ -571,12 +557,10 @@ mod tests {
     fn test_partial_ratio_issue138() {
         let s1 = &"a".repeat(65);
         let s2 = &format!("a{}{}", char::from_u32(256).unwrap(), "a".repeat(63));
+
         let result = partial_ratio(s1.chars(), s2.chars());
-        assert!(
-            (result - 0.9922481).abs() < 1e-5,
-            "Expected approximately 0.9922481, got {}",
-            result
-        );
+
+        assert_delta!(Some(0.9922481), Some(result));
     }
 
     #[test]
@@ -595,14 +579,14 @@ mod tests {
         dbg!(&alignment);
 
         assert!(
-            (alignment.as_ref().unwrap().score - 0.662337662).abs() < 1e-5,
+            (alignment.score - 0.662337662).abs() < 1e-5,
             "Expected 0.662337662, got {}",
-            alignment.unwrap().score
+            alignment.score
         );
-        assert_eq!(alignment.as_ref().unwrap().src_start, 0);
-        assert_eq!(alignment.as_ref().unwrap().src_end, 103);
-        assert_eq!(alignment.as_ref().unwrap().dest_start, 0);
-        assert_eq!(alignment.as_ref().unwrap().dest_end, 51);
+        assert_eq!(alignment.src_start, 0);
+        assert_eq!(alignment.src_end, 103);
+        assert_eq!(alignment.dest_start, 0);
+        assert_eq!(alignment.dest_end, 51);
     }
 
     #[test]
