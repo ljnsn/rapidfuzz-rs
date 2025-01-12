@@ -2,7 +2,7 @@ use crate::common::{NoScoreCutoff, SimilarityCutoff, WithScoreCutoff};
 use crate::details::distance::MetricUsize;
 use crate::distance::common::ScoreAlignment;
 use crate::distance::indel;
-use crate::HashableChar;
+use crate::{Hash, HashableChar};
 use std::collections::HashSet;
 
 #[must_use]
@@ -231,11 +231,17 @@ where
         }));
     }
 
+    let s1_char_set = s1_iter
+        .clone()
+        .map(|c| c.hash_char())
+        .collect::<HashSet<_>>();
+
     let mut res = partial_ratio_impl(
         s1_iter.clone(),
         len1,
         s2_iter.clone(),
         len2,
+        &s1_char_set,
         score_cutoff,
         args.score_hint,
     );
@@ -247,6 +253,7 @@ where
             len2,
             s1_iter.clone(),
             len1,
+            &s1_char_set,
             score_cutoff,
             args.score_hint,
         );
@@ -272,6 +279,7 @@ fn partial_ratio_impl<Iter1, Iter2>(
     len1: usize,
     s2: Iter2,
     len2: usize,
+    s1_char_set: &HashSet<Hash>,
     mut score_cutoff: f64,
     score_hint: Option<f64>,
 ) -> ScoreAlignment
@@ -295,11 +303,6 @@ where
 
     let s1_iter = s1.into_iter();
     let s2_vec = s2.into_iter().collect::<Vec<_>>();
-
-    let s1_char_set = s1_iter
-        .clone()
-        .map(|c| c.hash_char())
-        .collect::<HashSet<_>>();
 
     let mut res = ScoreAlignment {
         score: 0.0,
@@ -619,6 +622,7 @@ mod tests {
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
+            &s1.chars().map(|c| c.hash_char()).collect(),
             0.0,
             None,
         );
@@ -640,6 +644,7 @@ mod tests {
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
+            &s1.chars().map(|c| c.hash_char()).collect(),
             0.0,
             None,
         );
