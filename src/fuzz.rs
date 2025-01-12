@@ -515,6 +515,27 @@ mod tests {
                 )
             );
         }
+
+        {
+            let score = partial_ratio(str1.chars(), str2.chars());
+
+            assert_eq!(
+                None,
+                partial_ratio_with_args(
+                    str1.chars(),
+                    str2.chars(),
+                    &Args::default().score_cutoff(score + 0.0001)
+                )
+            );
+            assert_delta!(
+                Some(score),
+                partial_ratio_with_args(
+                    str1.chars(),
+                    str2.chars(),
+                    &Args::default().score_cutoff(score - 0.0001)
+                )
+            );
+        }
     }
 
     // https://github.com/rapidfuzz/RapidFuzz/issues/210
