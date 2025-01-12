@@ -265,8 +265,7 @@ where
 }
 
 /**
-implementation of partial_ratio for needles <= 64. assumes s1 is already the
-shorter string
+implementation of partial_ratio for needles <= 64. assumes len(s1) <= len(s2)
 */
 fn partial_ratio_impl<Iter1, Iter2>(
     s1: Iter1,
