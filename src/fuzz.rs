@@ -236,24 +236,27 @@ where
         .map(|c| c.hash_char())
         .collect::<HashSet<_>>();
 
+    let indel_comp = indel::BatchComparator::new(s1_iter.clone());
+
     let mut res = partial_ratio_impl(
-        s1_iter.clone(),
         len1,
         s2_iter.clone(),
         len2,
         &s1_char_set,
+        indel_comp,
         score_cutoff,
         args.score_hint,
     );
 
     if (res.score != 1.0) && (len1 == len2) {
         score_cutoff = f64::max(score_cutoff, res.score);
+        let indel_comp = indel::BatchComparator::new(s2_iter.clone());
         let res2 = partial_ratio_impl(
-            s2_iter.clone(),
             len2,
             s1_iter.clone(),
             len1,
             &s1_char_set,
+            indel_comp,
             score_cutoff,
             args.score_hint,
         );
@@ -274,22 +277,20 @@ where
 /**
 implementation of partial_ratio for needles <= 64. assumes len(s1) <= len(s2)
 */
-fn partial_ratio_impl<Iter1, Iter2>(
-    s1: Iter1,
+fn partial_ratio_impl<Elem1, Iter2>(
     len1: usize,
     s2: Iter2,
     len2: usize,
     s1_char_set: &HashSet<Hash>,
+    indel_comp: indel::BatchComparator<Elem1>,
     mut score_cutoff: f64,
     score_hint: Option<f64>,
 ) -> ScoreAlignment
 where
-    Iter1: IntoIterator,
-    Iter1::IntoIter: DoubleEndedIterator + Clone,
     Iter2: IntoIterator,
     Iter2::IntoIter: DoubleEndedIterator + Clone,
-    Iter1::Item: PartialEq<Iter2::Item> + HashableChar + Copy,
-    Iter2::Item: PartialEq<Iter1::Item> + HashableChar + Copy,
+    Elem1: PartialEq<Iter2::Item> + HashableChar + Copy,
+    Iter2::Item: PartialEq<Elem1> + HashableChar + Copy,
 {
     if len1 == 0 {
         return ScoreAlignment {
@@ -301,7 +302,6 @@ where
         };
     }
 
-    let s1_iter = s1.into_iter();
     let s2_vec = s2.into_iter().collect::<Vec<_>>();
 
     let mut res = ScoreAlignment {
@@ -311,8 +311,6 @@ where
         dest_start: 0,
         dest_end: len1,
     };
-
-    let indel_comp = indel::BatchComparator::new(s1_iter.clone());
 
     for i in 1..len1 {
         let substr_last = &s2_vec[i - 1];
@@ -617,12 +615,14 @@ mod tests {
         let s1 = "abcd";
         let s2 = "abcd";
 
+        let indel_comp = indel::BatchComparator::new(s1.chars());
+
         let result = partial_ratio_impl(
-            s1.chars(),
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
             &s1.chars().map(|c| c.hash_char()).collect(),
+            indel_comp,
             0.0,
             None,
         );
@@ -639,12 +639,14 @@ mod tests {
         let s1 = "bcd";
         let s2 = "abcde";
 
+        let indel_comp = indel::BatchComparator::new(s1.chars());
+
         let result = partial_ratio_impl(
-            s1.chars(),
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
             &s1.chars().map(|c| c.hash_char()).collect(),
+            indel_comp,
             0.0,
             None,
         );
