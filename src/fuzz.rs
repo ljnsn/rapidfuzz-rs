@@ -239,11 +239,11 @@ where
     let indel_comp = indel::BatchComparator::new(s1_iter.clone());
 
     let mut res = partial_ratio_impl(
+        &indel_comp,
         len1,
         s2_iter.clone(),
         len2,
         &s1_char_set,
-        indel_comp,
         score_cutoff,
         args.score_hint,
     );
@@ -252,11 +252,11 @@ where
         score_cutoff = f64::max(score_cutoff, res.score);
         let indel_comp = indel::BatchComparator::new(s2_iter.clone());
         let res2 = partial_ratio_impl(
+            &indel_comp,
             len2,
             s1_iter.clone(),
             len1,
             &s1_char_set,
-            indel_comp,
             score_cutoff,
             args.score_hint,
         );
@@ -278,11 +278,11 @@ where
 implementation of partial_ratio for needles <= 64. assumes len(s1) <= len(s2)
 */
 fn partial_ratio_impl<Elem1, Iter2>(
+    comparator: &indel::BatchComparator<Elem1>,
     len1: usize,
     s2: Iter2,
     len2: usize,
     s1_char_set: &HashSet<Hash>,
-    indel_comp: indel::BatchComparator<Elem1>,
     mut score_cutoff: f64,
     score_hint: Option<f64>,
 ) -> ScoreAlignment
@@ -318,7 +318,7 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp
+        let ls_ratio = comparator
             .normalized_similarity_with_args(
                 s2_vec[..i].iter().cloned(),
                 &indel::Args {
@@ -345,7 +345,7 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp
+        let ls_ratio = comparator
             .normalized_similarity_with_args(
                 s2_vec[i..i + len1].iter().cloned(),
                 &indel::Args {
@@ -371,7 +371,7 @@ where
             continue;
         }
 
-        let ls_ratio = indel_comp
+        let ls_ratio = comparator
             .normalized_similarity_with_args(
                 s2_vec[i..].iter().cloned(),
                 &indel::Args {
@@ -392,6 +392,82 @@ where
     }
 
     res
+}
+
+/// `One x Many` comparisons using `partial_ratio`
+///
+/// # Examples
+///
+/// ```
+/// use rapidfuzz::fuzz;
+///
+/// let scorer = fuzz::PartialRatioBatchComparator::new("this is a test".chars());
+/// /// score is 1.0
+/// let score = scorer.similarity("this is a test!".chars());
+/// ```
+pub struct PartialRatioBatchComparator<Elem1> {
+    scorer: indel::BatchComparator<Elem1>,
+}
+
+impl<Elem1> PartialRatioBatchComparator<Elem1>
+where
+    Elem1: HashableChar + Clone,
+{
+    pub fn new<Iter1>(s1: Iter1) -> Self
+    where
+        Iter1: IntoIterator<Item = Elem1>,
+        Iter1::IntoIter: Clone,
+    {
+        Self {
+            scorer: indel::BatchComparator::new(s1),
+        }
+    }
+
+    /// Similarity calculated similar to [`partial_ratio`]
+    pub fn similarity<Iter2>(&self, s2: Iter2) -> f64
+    where
+        Iter2: IntoIterator,
+        Iter2::IntoIter: DoubleEndedIterator + Clone,
+        Elem1: PartialEq<Iter2::Item> + HashableChar + Copy,
+        Iter2::Item: PartialEq<Elem1> + HashableChar + Copy,
+    {
+        self.similarity_with_args(s2, &Args::default())
+    }
+
+    pub fn similarity_with_args<Iter2, CutoffType>(
+        &self,
+        s2: Iter2,
+        args: &Args<f64, CutoffType>,
+    ) -> CutoffType::Output
+    where
+        Iter2: IntoIterator,
+        Iter2::IntoIter: DoubleEndedIterator + Clone,
+        Elem1: PartialEq<Iter2::Item> + HashableChar + Copy,
+        Iter2::Item: PartialEq<Elem1> + HashableChar + Copy,
+        CutoffType: SimilarityCutoff<f64>,
+    {
+        let s2_iter = s2.into_iter();
+
+        let res = partial_ratio_impl(
+            &self.scorer,
+            self.scorer.scorer.s1.len(),
+            s2_iter.clone(),
+            s2_iter.count(),
+            &self
+                .scorer
+                .scorer
+                .s1
+                .iter()
+                .map(|c| c.hash_char())
+                .collect(),
+            args.score_cutoff.cutoff().unwrap_or(0.0),
+            args.score_hint,
+        );
+
+        let alignment = args.score_cutoff.alignment(Some(res));
+        let score = alignment.into().map_or(0.0, |alignment| alignment.score);
+        args.score_cutoff.score(score)
+    }
 }
 
 #[cfg(test)]
@@ -618,11 +694,11 @@ mod tests {
         let indel_comp = indel::BatchComparator::new(s1.chars());
 
         let result = partial_ratio_impl(
+            &indel_comp,
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
             &s1.chars().map(|c| c.hash_char()).collect(),
-            indel_comp,
             0.0,
             None,
         );
@@ -642,11 +718,11 @@ mod tests {
         let indel_comp = indel::BatchComparator::new(s1.chars());
 
         let result = partial_ratio_impl(
+            &indel_comp,
             s1.chars().count(),
             s2.chars(),
             s2.chars().count(),
             &s1.chars().map(|c| c.hash_char()).collect(),
-            indel_comp,
             0.0,
             None,
         );
