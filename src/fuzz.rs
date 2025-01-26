@@ -231,6 +231,16 @@ where
         }));
     }
 
+    if len1 == 0 && len2 == 0 {
+        return args.score_cutoff.alignment(Some(ScoreAlignment {
+            score: 1.0,
+            src_start: 0,
+            src_end: 0,
+            dest_start: 0,
+            dest_end: 0,
+        }));
+    }
+
     let s1_char_set = s1_iter
         .clone()
         .map(|c| c.hash_char())
@@ -544,6 +554,15 @@ mod tests {
         assert_delta!(
             Some(1.0),
             Some(ratio_with_args("".chars(), "".chars(), &Args::default()))
+        );
+
+        assert_delta!(
+            Some(1.0),
+            Some(partial_ratio_with_args(
+                "".chars(),
+                "".chars(),
+                &Args::default()
+            ))
         );
     }
 
