@@ -647,7 +647,8 @@ mod tests {
         let s1 = "this is a test";
         let s2 = "this is a test!";
         let result = partial_ratio(s1.chars(), s2.chars());
-        assert_eq!(result, 1.0, "Expected 1.0");
+
+        assert_delta!(Some(1.0), Some(result));
     }
 
     #[test]
