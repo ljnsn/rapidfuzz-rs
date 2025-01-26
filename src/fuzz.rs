@@ -271,7 +271,13 @@ where
         }
     }
 
-    args.score_cutoff.alignment(Some(res))
+    let alignment = if res.score < score_cutoff {
+        None
+    } else {
+        Some(res)
+    };
+
+    args.score_cutoff.alignment(alignment)
 }
 
 /**
