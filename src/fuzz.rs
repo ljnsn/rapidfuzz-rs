@@ -658,6 +658,26 @@ mod tests {
     }
 
     #[test]
+    fn test_partial_ratio_issue76() {
+        let s1 = "physics 2 vid";
+        let s2 = "study physics physics 2 video";
+
+        let result = partial_ratio(s1.chars(), s2.chars());
+
+        assert_delta!(Some(1.0), Some(result))
+    }
+
+    #[test]
+    fn test_partial_ratio_issue90() {
+        let s1 = "ax b";
+        let s2 = "a b a c b";
+
+        let result = partial_ratio(s1.chars(), s2.chars());
+
+        assert_delta!(Some(0.8571428), Some(result))
+    }
+
+    #[test]
     fn test_partial_ratio_issue138() {
         let s1 = &"a".repeat(65);
         let s2 = &format!("a{}{}", char::from_u32(256).unwrap(), "a".repeat(63));
@@ -669,6 +689,72 @@ mod tests {
 
     #[test]
     fn test_partial_ratio_alignment() {
+        let s1 = "a certain string";
+        let s2 = "certain";
+
+        let result1 = partial_ratio_alignment(
+            s2.chars(),
+            s2.chars().count(),
+            s1.chars(),
+            s1.chars().count(),
+            &Args::default(),
+        );
+
+        assert_eq!(
+            result1,
+            ScoreAlignment {
+                score: 1.0,
+                src_start: 0,
+                src_end: s2.len(),
+                dest_start: 2,
+                dest_end: 2 + s2.len()
+            }
+        );
+
+        let result2 = partial_ratio_alignment(
+            s1.chars(),
+            s1.chars().count(),
+            s2.chars(),
+            s2.chars().count(),
+            &Args::default(),
+        );
+
+        assert_eq!(
+            result2,
+            ScoreAlignment {
+                score: 1.0,
+                src_start: 2,
+                src_end: 2 + s2.len(),
+                dest_start: 0,
+                dest_end: s2.len()
+            }
+        );
+
+        // assert_eq!(
+        //     None,
+        //     Some(partial_ratio_alignment(
+        //         None,
+        //         0,
+        //         "test".chars(),
+        //         "test".chars().count(),
+        //         &Args::default()
+        //     ))
+        // );
+
+        assert_eq!(
+            None,
+            partial_ratio_alignment(
+                "test".chars(),
+                "test".chars().count(),
+                "tesx".chars(),
+                "tesx".chars().count(),
+                &Args::default().score_cutoff(0.9)
+            )
+        );
+    }
+
+    #[test]
+    fn test_partial_ratio_alignment_issue231() {
         let str1 = "er merkantilismus förderte handle und verkehr mit teils marktkonformen, teils dirigistischen maßnahmen.";
         let str2 = "ils marktkonformen, teils dirigistischen maßnahmen. an der schwelle zum 19. jahrhundert entstand ein neu";
 
