@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_ratio() {
+    fn test_partially_equal() {
         //assert_delta!(Some(1.0), partial_ratio(S1.chars(), S1.chars(), None, None));
         assert_delta!(
             Some(0.65),
@@ -643,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_ratio2() {
+    fn test_partial_ratio() {
         let s1 = "this is a test";
         let s2 = "this is a test!";
         let result = partial_ratio(s1.chars(), s2.chars());
