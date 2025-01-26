@@ -707,6 +707,22 @@ mod tests {
     }
 
     #[test]
+    fn test_partial_ratio_issue257() {
+        let s1 = "aaaaaaaaaaaaaaaaaaaaaaaabacaaaaaaaabaaabaaaaaaaababbbbbbbbbbabbcb";
+        let s2 = "aaaaaaaaaaaaaaaaaaaaaaaababaaaaaaaabaaabaaaaaaaababbbbbbbbbbabbcb";
+
+        let expected = 0.9846153846153847;
+
+        let score = partial_ratio(s1.chars(), s2.chars());
+
+        assert_delta!(Some(expected), Some(score));
+
+        let score = partial_ratio(s2.chars(), s1.chars());
+
+        assert_delta!(Some(expected), Some(score));
+    }
+
+    #[test]
     fn test_partial_ratio_alignment() {
         let s1 = "a certain string";
         let s2 = "certain";
