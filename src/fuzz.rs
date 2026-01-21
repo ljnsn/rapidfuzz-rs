@@ -369,15 +369,10 @@ where
         for (start, end) in windows.drain(..) {
             if scores[start] == usize::MAX {
                 let subseq = &s2_vec[start..start + len1];
-                let dist = comparator
-                    .distance_with_args(
-                        subseq.iter().cloned(),
-                        &indel::Args::default().score_cutoff(cutoff_dist),
-                    )
-                    .unwrap_or(usize::MAX);
+                let dist = comparator.distance(subseq.iter().cloned());
                 scores[start] = dist;
 
-                if dist <= cutoff_dist && dist < best_dist {
+                if dist < best_dist {
                     best_dist = dist;
                     cutoff_dist = dist;
                     res.score = 1.0 - (dist as f64 / len_sum as f64);
@@ -392,15 +387,10 @@ where
 
             if scores[end] == usize::MAX {
                 let subseq = &s2_vec[end..end + len1];
-                let dist = comparator
-                    .distance_with_args(
-                        subseq.iter().cloned(),
-                        &indel::Args::default().score_cutoff(cutoff_dist),
-                    )
-                    .unwrap_or(usize::MAX);
+                let dist = comparator.distance(subseq.iter().cloned());
                 scores[end] = dist;
 
-                if dist <= cutoff_dist && dist < best_dist {
+                if dist < best_dist {
                     best_dist = dist;
                     cutoff_dist = dist;
                     res.score = 1.0 - (dist as f64 / len_sum as f64);
@@ -422,21 +412,17 @@ where
             let score_end = scores[end];
 
             let min_val = cmp::min(score_start, score_end);
-            let min_score_is_promising = if score_start == usize::MAX || score_end == usize::MAX {
-                true
-            } else {
-                let known_edits = score_start.abs_diff(score_end);
+            let known_edits = score_start.abs_diff(score_end);
 
-                // half of the cells that are not needed for known_edits can lead to a better score
-                let max_score_improvement = (cell_diff - known_edits / 2) / 2 * 2;
-                min_val <= cutoff_dist + max_score_improvement
-            };
-
-            if min_score_is_promising {
-                let center = cell_diff / 2;
-                new_windows.push((start, start + center));
-                new_windows.push((start + center, end));
+            // half of the cells that are not needed for known_edits can lead to a better score
+            let max_score_improvement = (cell_diff.saturating_sub(known_edits / 2) / 2) * 2;
+            if min_val > cutoff_dist.saturating_add(max_score_improvement) {
+                continue;
             }
+
+            let center = cell_diff / 2;
+            new_windows.push((start, start + center));
+            new_windows.push((start + center, end));
         }
         std::mem::swap(&mut windows, &mut new_windows);
     }
