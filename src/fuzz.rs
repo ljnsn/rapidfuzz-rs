@@ -3,6 +3,7 @@ use crate::details::distance::MetricUsize;
 use crate::distance::common::ScoreAlignment;
 use crate::distance::indel;
 use crate::{Hash, HashableChar};
+use std::cmp;
 use std::collections::HashSet;
 
 #[must_use]
@@ -328,6 +329,9 @@ where
         dest_end: len1,
     };
 
+    let len_sum = 2 * len1;
+    let mut cutoff_dist = (len_sum as f64 * (1.0 - score_cutoff)).ceil() as usize;
+
     for i in 1..len1 {
         let substr_last = &s2_vec[i - 1];
         if !s1_char_set.contains(&substr_last.hash_char()) {
@@ -345,6 +349,7 @@ where
             .unwrap_or(0.0);
         if ls_ratio > res.score {
             score_cutoff = ls_ratio;
+            cutoff_dist = (len_sum as f64 * (1.0 - score_cutoff)).ceil() as usize;
             res.score = ls_ratio;
             res.dest_start = 0;
             res.dest_end = i;
@@ -355,33 +360,88 @@ where
     }
 
     let window_end = len2 - len1;
-    for i in 0..window_end {
-        let substr_last = &s2_vec[i + len1 - 1];
-        if !s1_char_set.contains(&substr_last.hash_char()) {
-            continue;
-        }
+    let mut scores = vec![usize::MAX; window_end + 1];
+    let mut windows = vec![(0, window_end)];
+    let mut new_windows = Vec::new();
+    let mut best_dist = (len_sum as f64 * (1.0 - res.score)).ceil() as usize;
 
-        let ls_ratio = comparator
-            .normalized_similarity_with_args(
-                s2_vec[i..i + len1].iter().cloned(),
-                &indel::Args {
-                    score_cutoff: WithScoreCutoff(score_cutoff),
-                    score_hint,
-                },
-            )
-            .unwrap_or(0.0);
-        if ls_ratio > res.score {
-            score_cutoff = ls_ratio;
-            res.score = ls_ratio;
-            res.dest_start = i;
-            res.dest_end = i + len1;
-            if res.score == 1.0 {
-                return res;
+    while !windows.is_empty() {
+        for (start, end) in windows.drain(..) {
+            if scores[start] == usize::MAX {
+                let subseq = &s2_vec[start..start + len1];
+                let dist = comparator
+                    .distance_with_args(
+                        subseq.iter().cloned(),
+                        &indel::Args::default().score_cutoff(cutoff_dist),
+                    )
+                    .unwrap_or(usize::MAX);
+                scores[start] = dist;
+
+                if dist <= cutoff_dist && dist < best_dist {
+                    best_dist = dist;
+                    cutoff_dist = dist;
+                    res.score = 1.0 - (dist as f64 / len_sum as f64);
+                    res.dest_start = start;
+                    res.dest_end = start + len1;
+                    score_cutoff = res.score;
+                    if dist == 0 {
+                        return res;
+                    }
+                }
+            }
+
+            if scores[end] == usize::MAX {
+                let subseq = &s2_vec[end..end + len1];
+                let dist = comparator
+                    .distance_with_args(
+                        subseq.iter().cloned(),
+                        &indel::Args::default().score_cutoff(cutoff_dist),
+                    )
+                    .unwrap_or(usize::MAX);
+                scores[end] = dist;
+
+                if dist <= cutoff_dist && dist < best_dist {
+                    best_dist = dist;
+                    cutoff_dist = dist;
+                    res.score = 1.0 - (dist as f64 / len_sum as f64);
+                    res.dest_start = end;
+                    res.dest_end = end + len1;
+                    score_cutoff = res.score;
+                    if dist == 0 {
+                        return res;
+                    }
+                }
+            }
+
+            let cell_diff = end - start;
+            if cell_diff <= 1 {
+                continue;
+            }
+
+            let score_start = scores[start];
+            let score_end = scores[end];
+
+            let min_val = cmp::min(score_start, score_end);
+            let min_score_is_promising = if score_start == usize::MAX || score_end == usize::MAX {
+                true
+            } else {
+                let known_edits = score_start.abs_diff(score_end);
+
+                // half of the cells that are not needed for known_edits can lead to a better score
+                let max_score_improvement = (cell_diff - known_edits / 2) / 2 * 2;
+                min_val <= cutoff_dist + max_score_improvement
+            };
+
+            if min_score_is_promising {
+                let center = cell_diff / 2;
+                new_windows.push((start, start + center));
+                new_windows.push((start + center, end));
             }
         }
+        std::mem::swap(&mut windows, &mut new_windows);
     }
 
-    for i in window_end..len2 {
+    for i in window_end + 1..len2 {
         let substr_first = &s2_vec[i];
         if !s1_char_set.contains(&substr_first.hash_char()) {
             continue;
